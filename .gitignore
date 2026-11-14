@@ -1,0 +1,12 @@
+# data (downloaded, too large for git)
+data/raw/
+data/processed/
+*.csv
+*.zip
+# python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+# outputs
+models/
