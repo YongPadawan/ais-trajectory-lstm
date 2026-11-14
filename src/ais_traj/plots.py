@@ -19,21 +19,23 @@ COLORS = {
     "Persistence (stay put)": "#9ca3af",
     "Constant velocity": "#f59e0b",
     "Dead reckoning (SOG/COG)": "#10b981",
+    "Hybrid: dead reckoning + LSTM": "#7c3aed",
 }
 
 
-def bar_chart(df: pd.DataFrame, title: str, path):
+def bar_chart(df: pd.DataFrame, title: str, path, metric="mean_error_m", exclude=()):
+    df = df[~df["method"].isin(exclude)]
     freqs = list(dict.fromkeys(df["freq"]))
     methods = list(dict.fromkeys(df["method"]))
     w = 0.8 / len(methods)
     fig, ax = plt.subplots(figsize=(8, 4.2))
     for i, m in enumerate(methods):
-        vals = [df[(df.freq == f) & (df.method == m)]["median_error_m"].iloc[0] for f in freqs]
+        vals = [df[(df.freq == f) & (df.method == m)][metric].iloc[0] for f in freqs]
         xs = np.arange(len(freqs)) + (i - (len(methods) - 1) / 2) * w
         bars = ax.bar(xs, vals, w, label=m, color=COLORS.get(m))
         ax.bar_label(bars, fmt="%.0f", fontsize=8, padding=2)
     ax.set_xticks(range(len(freqs)), [f"{f} ahead" for f in freqs])
-    ax.set_ylabel("Median position error (m)")
+    ax.set_ylabel("Mean position error (m)")
     ax.set_title(title)
     ax.legend(frameon=False, fontsize=9)
     ax.spines[["top", "right"]].set_visible(False)
@@ -73,8 +75,9 @@ def main():
     if (RES / "experiment_metrics.csv").exists():
         bar_chart(
             pd.read_csv(RES / "experiment_metrics.csv"),
-            "Improved setup: all moving vessels, unseen test ships",
+            "Improved setup: ~900 moving vessels, tested on unseen ships",
             FIG / "experiment_errors.png",
+            exclude=("Persistence (stay put)",),
         )
     print(f"Figures written to {FIG}")
 

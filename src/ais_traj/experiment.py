@@ -107,48 +107,60 @@ def run_freq(df: pd.DataFrame, freq: str, rng: np.random.Generator):
         f"{tr.sum()}/{va.sum()}/{te.sum()}"
     )
 
-    # Standardise inputs and targets with training-set statistics only.
-    x_mu, x_sd = X[tr].reshape(-1, X.shape[2]).mean(0), X[tr].reshape(-1, X.shape[2]).std(0) + 1e-6
-    y_mu, y_sd = y[tr].mean(0), y[tr].std(0) + 1e-6
+    # Standardise inputs with training-set statistics only. The dead-reckoning
+    # step is added as an extra input so the hybrid model knows what it corrects.
+    X = np.concatenate([X, np.repeat(dr[:, None, :], X.shape[1], axis=1)], axis=2)
+    x_mu = X[tr].reshape(-1, X.shape[2]).mean(0)
+    x_sd = X[tr].reshape(-1, X.shape[2]).std(0) + 1e-6
     Xn = (X - x_mu) / x_sd
-    yn = (y - y_mu) / y_sd
 
-    models.set_seed(42)
-    model = models.displacement_lstm(WINDOW, X.shape[2])
-    hist = model.fit(
-        Xn[tr],
-        yn[tr],
-        validation_data=(Xn[va], yn[va]),
-        epochs=100,
-        batch_size=512,
-        verbose=2,
-        callbacks=[
-            keras.callbacks.EarlyStopping(patience=8, restore_best_weights=True),
-            keras.callbacks.ReduceLROnPlateau(patience=4, factor=0.5),
-        ],
-    )
-    pred = model.predict(Xn[te], batch_size=4096, verbose=0) * y_sd + y_mu
+    def train(target: np.ndarray, name: str):
+        """Train an LSTM on a standardised target; return test predictions in meters."""
+        t_mu, t_sd = target[tr].mean(0), target[tr].std(0) + 1e-6
+        tn = (target - t_mu) / t_sd
+        models.set_seed(42)
+        model = models.displacement_lstm(WINDOW, X.shape[2])
+        hist = model.fit(
+            Xn[tr],
+            tn[tr],
+            validation_data=(Xn[va], tn[va]),
+            epochs=100,
+            batch_size=512,
+            verbose=2,
+            callbacks=[
+                keras.callbacks.EarlyStopping(patience=8, restore_best_weights=True),
+                keras.callbacks.ReduceLROnPlateau(patience=4, factor=0.5),
+            ],
+        )
+        model.save(data.ROOT / "models" / f"{name}_{freq}.keras")
+        pred = model.predict(Xn[te], batch_size=4096, verbose=0) * t_sd + t_mu
+        return pred, hist.history
+
+    # 1) Pure LSTM: predicts the next displacement directly.
+    pred_lstm, hist_lstm = train(y, "lstm")
+    # 2) Hybrid: physics first, LSTM learns only the correction to dead reckoning.
+    resid, hist_hyb = train(y - dr, "hybrid")
+    pred_hybrid = dr[te] + resid
 
     true = y[te]
     lx = last_xy[te]
     n_te = int(te.sum())
     rows = [
-        summarize("LSTM (displacement)", errors_m(pred, true), freq, n_te),
-        summarize("Persistence (stay put)", errors_m(np.zeros_like(true), true), freq, n_te),
-        summarize("Constant velocity", errors_m(lx[:, 1] - lx[:, 0], true), freq, n_te),
+        summarize("Hybrid: dead reckoning + LSTM", errors_m(pred_hybrid, true), freq, n_te),
+        summarize("LSTM (displacement)", errors_m(pred_lstm, true), freq, n_te),
         summarize("Dead reckoning (SOG/COG)", errors_m(dr[te], true), freq, n_te),
+        summarize("Constant velocity", errors_m(lx[:, 1] - lx[:, 0], true), freq, n_te),
+        summarize("Persistence (stay put)", errors_m(np.zeros_like(true), true), freq, n_te),
     ]
     extra = {
         "freq": freq,
         "n_vessels": n,
         "n_train": int(tr.sum()),
         "n_val": int(va.sum()),
-        "epochs_run": len(hist.history["loss"]),
-        "loss": hist.history["loss"],
-        "val_loss": hist.history["val_loss"],
+        "history_lstm": hist_lstm,
+        "history_hybrid": hist_hyb,
         "mean_step_m": float(np.linalg.norm(true, axis=1).mean()),
     }
-    model.save(data.ROOT / "models" / f"displacement_lstm_{freq}.keras")
     return rows, extra
 
 
@@ -158,7 +170,6 @@ def main():
     df = data.load_clean()
     print(f"{len(df):,} clean Class A position reports, {df['mmsi'].nunique()} vessels")
 
-    rng = np.random.default_rng(42)
     rows, extras = [], []
     for freq in FREQS:
         r, e = run_freq(df, freq, np.random.default_rng(42))
