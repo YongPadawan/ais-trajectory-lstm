@@ -5,16 +5,22 @@ messages from the Danish Maritime Authority.
 
 This started as my BSc thesis at the **University of Piraeus** (Department of
 Digital Systems, April 2025). The thesis reported an LSTM with **R² = 0.999**.
-When I revisited it, I found that number was misleading, so I rebuilt the
-evaluation and the model. This repo has both: the original thesis code, and the
-improved version.
+In November 2026 I revisited it with an AI coding assistant, which found that
+number was misleading and rebuilt the evaluation and the model. This repo has
+both, kept clearly apart:
+
+- **My thesis work:** [`thesis/original_thesis_notebook.ipynb`](thesis/original_thesis_notebook.ipynb):
+  data preparation, exploratory analysis and the LSTM, written by me.
+- **Follow-up analysis:** everything under `src/` and `scripts/`, the baselines,
+  the multi-vessel and hybrid models, and the results below, written with
+  [Claude Code](https://claude.com/claude-code) in November 2026.
 
 ![Mean position error by method](figures/experiment_errors.png)
 
 ## Key results
 
-**1. The thesis metric was misleading.** I re-ran the original experiment and
-compared it with two baselines that need no training:
+**1. The thesis metric was misleading.** The original experiment was re-run and
+compared with two baselines that need no training:
 
 | 1 minute ahead (thesis vessel) | R² | Mean error |
 |---|---|---|
@@ -29,7 +35,7 @@ vessel (a ferry) and about 1,100 training samples were too little for it to
 learn anything useful.
 
 **2. A hybrid model beats physics.** The thesis proposed hybrid models as future
-work, so I built one. Dead reckoning (projecting the last reported speed and
+work, and the follow-up built one. Dead reckoning (projecting the last reported speed and
 course forward) makes the prediction, and an LSTM learns to correct it. It was
 trained on about 900 moving vessels and tested on ships it never saw during training.
 
