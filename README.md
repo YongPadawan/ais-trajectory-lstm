@@ -84,7 +84,7 @@ straight-line cases physics already gets right.
 Requires Python 3.10–3.12. An NVIDIA GPU is optional; everything also runs on CPU.
 
 ```bash
-git clone https://github.com/YongPadawan/ais-trajectory-lstm
+git clone https://github.com/kounikos/ais-trajectory-lstm
 cd ais-trajectory-lstm
 python -m venv .venv && source .venv/bin/activate
 pip install -e .            # or: pip install -e ".[gpu]"
